@@ -5,8 +5,9 @@
 ## reconfigure default facts directory according to your system
 default_facts_dir="/etc/shellfacts/facts.d"
 
-[ -z "$FACTSDIR" ] && facts_dir="$FACTSDIR" ||
-facts_dir="$default_facts_dir"
+[ -z "$FACTSDIR" ] && facts_dir="$default_facts_dir" ||
+facts_dir="$FACTSDIR"
+
 
 usage() {
     cat <<EOF >&2
