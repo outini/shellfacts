@@ -17,11 +17,13 @@ dmidecode_parse() {
     [ -z "$2" ] && body_actions="print" || body_actions="$2"
     [ -z "$3" ] && end_actions= || end_actions="$3"
 
+    [ -z "$DMIDECODE" ] ||
     echo "$DMIDECODE" | awk "/^$block_name/,/^$/{
            $body_actions
          } END { $end_actions }"
 }
 get_pci_facts_light() {
+    [ -z "$LSPCI" ] ||
     echo "$LSPCI" | awk -F: '
         /Ethernet controller/ { gsub("^[[:space:]]+", "", $3); eth = $3 }
         /storage controller/ { gsub("^[[:space:]]+", "", $3); disk = $3 }
@@ -31,6 +33,7 @@ get_pci_facts_light() {
         }'
 }
 get_pci_facts_full() {
+    [ -z "$LSPCI" ] ||
     echo "$LSPCI" | awk -F: '
         /Ethernet controller/ {
             gsub("^[[:space:]]+", "", $3)
@@ -52,7 +55,9 @@ get_pci_facts_full() {
 }
 
 get_dmi_facts_light() {
-    [ `echo "$DMIDECODE" | wc -l` ] || {
+    # dmidecode only display 2 lines of comment
+    # if it has not access to chassis informations (ie. virtual machine)
+    [ `wc -l <<< "$DMIDECODE"` -gt 2 ] || {
         echo "product_model: virtual machine" && return 0
     }
     ## Get product informations
@@ -102,8 +107,10 @@ get_dmi_facts_light() {
     dmidecode_parse 'Memory Device' "$awk_body" "$awk_end"
 }
 get_dmi_facts_full() {
-    [ `echo "$DMIDECODE" | wc -l` ] || {
-	echo "product: {model:virtual machine}" && return 0
+    # dmidecode only display 2 lines of comment
+    # if it has not access to chassis informations (ie. virtual machine)
+    [ `wc -l <<< "$DMIDECODE"` -gt 2 ] || {
+        echo "product_model: virtual machine" && return 0
     }
 
     ## Get product informations
@@ -186,6 +193,7 @@ get_dmi_facts_full() {
     dmidecode_parse 'Memory Device' "$awk_body" "$awk_end"
 }
 
+
 [ "`whoami`" = "root" ] || die "you must be root"
 
 while [ $# -gt 0 ]; do
@@ -198,6 +206,6 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$details" ] && details=light
 
-init_infos
+init_infos 2>/dev/null
 get_pci_facts_$details
 get_dmi_facts_$details
