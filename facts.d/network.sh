@@ -4,23 +4,30 @@
 
 PATH=$PATH:/sbin:/usr/sbin
 
-OS=`uname -s`
-case $OS in
-    Linux)
-	IFCFG="ip addr show"
-	BRCFG="brctl show"
-	;;
-    *)
-	IFCFG="ifconfig -a"
-	BRCFG="brconfig -a"
-	;;
-esac
+init_infos() {
+    OS=`uname -s`
+    case $OS in
+	Linux)
+	    [ -z "$IFCFG" ] &&
+	    { IFCFG=`ip addr show` || IFCFG= ; }
+	    [ -z "$BRCFG" ] &&
+	    { BRCFG=`brctl show` || BRCFG= ; }
+	    ;;
+	*)
+	    [ -z "$IFCFG" ] &&
+	    { IFCFG=`ifconfig -a` || IFCFG= ; }
+	    [ -z "$BRCFG" ] &&
+	    { BRCFG=`brconfig -a` || BRCFG= ; }
+	    ;;
+    esac
+}
 
 get_ifs_facts_light()
 { :; }
 get_ifs_facts_full()
 {
-    eval ${IFCFG} |awk -v os="$OS" '
+    [ -z "${IFCFG}" ] ||
+    echo "${IFCFG}" |awk -v os="$OS" '
 	BEGIN {
 	    start = "interface_%d: { "
 	    hasip4 = 0
@@ -85,14 +92,16 @@ get_ifs_facts_full()
 
 get_bridges_facts_light()
 {
-    eval ${BRCFG} | awk '
+    [ -z "${BRCFG}" ] ||
+    echo "${BRCFG}" | awk '
         /^[a-z0-9]/ && NR > 1 { count++ }
         END { print "network_bridges_count: " count }
         '
 }
 get_bridges_facts_full()
 {
-    eval ${BRCFG} | awk '
+    [ -z "${BRCFG}" ] ||
+    echo "${BRCFG}" | awk '
 	/^[a-z0-9]/ && NR > 1 {
             if (j > 0) {
                 members = mbrs[0]
@@ -122,8 +131,8 @@ get_routes_facts_light()
 {
     netstat -rn -46 | awk '
         ! /^[A-Z\ \t]/ {
-            if ($1 == "0.0.0.0") { printf("network_ipv4_gw: \"%s:%s\"", $1, $8) }
-        '
+            if ($1 == "0.0.0.0") { printf("network_ipv4_gw: \"%s:%s\"\n", $2, $8) }
+        }'
 }
 get_routes_facts_full()
 {
@@ -147,8 +156,8 @@ get_routes_facts_full()
 get_resolver_facts_light()
 {
     awk '
-        /nameserver/ { printf("resolver_ip: \"%s\"\n", $2)
-        /domain/ { printf("resolver_domain: \"%s\"\n", $2)
+        /nameserver/ { printf("resolver_ip: \"%s\"\n", $2) }
+        /domain/ { printf("resolver_domain: \"%s\"\n", $2) }
         ' /etc/resolv.conf
 }
 get_resolver_facts_full()
@@ -166,7 +175,6 @@ get_resolver_facts_full()
         }' /etc/resolv.conf
 }
 
-[ "$1" = "show" ] && { shift; "$@"; } && exit 0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -178,6 +186,7 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$details" ] && details=light
 
+init_infos 2>/dev/null
 get_ifs_facts_$details
 get_bridges_facts_$details
 get_routes_facts_$details
