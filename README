@@ -1,0 +1,6 @@
+## shellfacts
+
+Various shell scripts for retrieving facts from operating systems.
+Informations about network configuration, routing, system, xen hypervisor,
+hardware and APT packages are retrieved.
+More script will be implemented with future versions.
