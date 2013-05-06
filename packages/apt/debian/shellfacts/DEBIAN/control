@@ -1,0 +1,17 @@
+Package: shellfacts
+Version: 0.1
+Architecture: all
+Maintainer: Denis "jawa" Pompilio <denis.pompilio@gmail.com>
+Installed-Size: 96
+Depends: gawk
+Section: admin
+Priority: extra
+Homepage: http://github.com/outini/shellfacts
+Description: Shell scripts to retrieve facts from operating systems.
+ Set of various shell scripts for retrieving facts from operating systems.
+ Exemple of retrieved informations:
+   - network configuration and routing informations
+   - system informations and sysctl configuration
+   - xen hypervisor state and domUs states
+   - hardware configuration
+   - APT packages status

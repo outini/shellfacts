@@ -1,0 +1,93 @@
+ dpkg-buildpackage -rfakeroot -D -us -uc
+dpkg-buildpackage: export CFLAGS from dpkg-buildflags (origin: vendor): -g -O2
+dpkg-buildpackage: export CPPFLAGS from dpkg-buildflags (origin: vendor): 
+dpkg-buildpackage: export CXXFLAGS from dpkg-buildflags (origin: vendor): -g -O2
+dpkg-buildpackage: export FFLAGS from dpkg-buildflags (origin: vendor): -g -O2
+dpkg-buildpackage: export LDFLAGS from dpkg-buildflags (origin: vendor): 
+dpkg-buildpackage: source package shellfacts
+dpkg-buildpackage: source version 0.1
+dpkg-buildpackage: source changed by Denis "jawa" Pompilio <denis.pompilio@gmail.com>
+ dpkg-source --before-build apt
+dpkg-buildpackage: host architecture i386
+ fakeroot debian/rules clean
+dh clean 
+   dh_testdir
+   dh_auto_clean
+   dh_clean
+ dpkg-source -b apt
+dpkg-source: info: using source format `3.0 (native)'
+dpkg-source: info: building shellfacts in shellfacts_0.1.tar.gz
+dpkg-source: info: building shellfacts in shellfacts_0.1.dsc
+ debian/rules build
+dh build 
+   dh_testdir
+   dh_auto_configure
+   dh_auto_build
+make[1]: Entering directory `/home/jawa/developpement/github.dev/shellfacts/packages/apt'
+make[1]: Nothing to be done for `build'.
+make[1]: Leaving directory `/home/jawa/developpement/github.dev/shellfacts/packages/apt'
+   dh_auto_test
+ fakeroot debian/rules binary
+dh binary 
+   dh_testroot
+   dh_prep
+   dh_installdirs
+   dh_auto_install
+make[1]: Entering directory `/home/jawa/developpement/github.dev/shellfacts/packages/apt'
+mkdir -p /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/etc/shellfacts
+mkdir -p /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/usr/bin
+mkdir -p /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/usr/share/man/man8
+cp -R facts.d /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/etc/shellfacts/
+cp -R shellfacts /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/usr/bin/
+cp -R manpages/* /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/usr/share/man/man8/
+install -D -m 644 debian/copyright /home/jawa/developpement/github.dev/shellfacts/packages/apt/debian/shellfacts/usr/share/doc/shellfacts/copyright
+make[1]: Leaving directory `/home/jawa/developpement/github.dev/shellfacts/packages/apt'
+   dh_install
+   dh_installdocs
+   dh_installchangelogs
+   dh_installexamples
+   dh_installman
+   dh_installcatalogs
+   dh_installcron
+   dh_installdebconf
+   dh_installemacsen
+   dh_installifupdown
+   dh_installinfo
+   dh_pysupport
+   dh_installinit
+   dh_installmenu
+   dh_installmime
+   dh_installmodules
+   dh_installlogcheck
+   dh_installlogrotate
+   dh_installpam
+   dh_installppp
+   dh_installudev
+   dh_installwm
+   dh_installxfonts
+   dh_bugfiles
+   dh_lintian
+   dh_gconf
+   dh_icons
+   dh_perl
+   dh_usrlocal
+   dh_link
+   dh_compress
+   dh_fixperms
+   dh_strip
+   dh_makeshlibs
+   dh_shlibdeps
+   dh_installdeb
+   dh_gencontrol
+   dh_md5sums
+   dh_builddeb
+dpkg-deb: building package `shellfacts' in `../shellfacts_0.1_all.deb'.
+ dpkg-genchanges  >../shellfacts_0.1_i386.changes
+dpkg-genchanges: including full source code in upload
+ dpkg-source --after-build apt
+dpkg-buildpackage: full upload; Debian-native package (full source is included)
+Now running lintian...
+W: shellfacts: spelling-error-in-description informations information
+W: shellfacts: spelling-error-in-description informations information
+W: shellfacts: spelling-error-in-description informations information
+Finished running lintian.

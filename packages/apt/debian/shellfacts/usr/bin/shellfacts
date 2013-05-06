@@ -1,0 +1,64 @@
+#! /bin/sh
+
+[ "$DEBUG" = "true" ] || DEBUG=false
+
+## reconfigure default facts directory according to your system
+default_facts_dir="/etc/shellfacts/facts.d"
+
+[ -z "$FACTSDIR" ] && facts_dir="$default_facts_dir" ||
+facts_dir="$FACTSDIR"
+
+
+usage() {
+    cat <<EOF >&2
+$@
+Usage: $0 <action> [options]
+       $0 run [full|light]
+       $0 dump <file> [full|light]
+
+Actions:
+   run       Run all facts scripts from facts directory.
+   dump      Dump all generated facts in a yaml file.
+   help      Show this usage.
+
+Use this script to generate facts from your operating system.
+Facts directory can be specified via environment variable: FACTSDIR, default is
+  $default_facts_dir
+Only scripts named *.sh are runned from facts directory.
+
+This script can produce a yaml output with all generated facts
+Every facts scripts have to respect yaml syntax.
+
+EOF
+    exit 1
+}
+
+run_facts() {
+    for facts_script in ${facts_dir}/*.sh; do
+	${DEBUG} && echo "[DEBUG] running: ${facts_script}" >&2
+	"${facts_script}" "$@"
+    done
+    return 0
+}
+
+[ $# -lt 1 ] && usage
+action="$1"; shift
+
+[ -d "${facts_dir}" ] || usage "facts directory not found: ${facts_dir}"
+
+case "${action}" in
+    run)
+	run_facts "$@"
+	;;
+
+    dump)
+	[ -z "$1" ] && usage "action dump requires a file"
+	out_file="$1"; shift
+	echo "---" > "${out_file}"
+	run_facts "$@" >> "${out_file}"
+	;;
+
+    help) usage ;;
+
+    *) usage "Unknown action: ${action}"
+esac

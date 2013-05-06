@@ -1,0 +1,5 @@
+/etc/shellfacts/facts.d/system.sh
+/etc/shellfacts/facts.d/hardware.sh
+/etc/shellfacts/facts.d/xen_hypervisor.sh
+/etc/shellfacts/facts.d/network.sh
+/etc/shellfacts/facts.d/apt_versions.sh

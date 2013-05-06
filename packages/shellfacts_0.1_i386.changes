@@ -1,0 +1,28 @@
+Format: 1.8
+Date: Mon, 29 Oct 2012 18:12:35 +0100
+Source: shellfacts
+Binary: shellfacts
+Architecture: source all
+Version: 0.1
+Distribution: unstable
+Urgency: low
+Maintainer: Denis "jawa" Pompilio <denis.pompilio@gmail.com>
+Changed-By: Denis "jawa" Pompilio <denis.pompilio@gmail.com>
+Description: 
+ shellfacts - Shell scripts to retrieve facts from operating systems.
+Changes: 
+ shellfacts (0.1) unstable; urgency=low
+ .
+   * Initial Release.
+Checksums-Sha1: 
+ f9ba51d29b5b69c1410f9ab4e3bb80e2628199c3 575 shellfacts_0.1.dsc
+ 49d3ac74005c05d7593825b73281c82c2e1bc0f6 8502 shellfacts_0.1.tar.gz
+ 215f6ef5e90c41dff48bb07dacefb11f4f0d6c3c 8426 shellfacts_0.1_all.deb
+Checksums-Sha256: 
+ cbd8c3ee36aed9c8ce14cf176cf0e9aeabfb099380ece4a4c027eb5d0536119d 575 shellfacts_0.1.dsc
+ f2720cbd5041690c00a05bcc8d60b9e0247945f24b16a502a9fbcc160d4b91be 8502 shellfacts_0.1.tar.gz
+ 1a38ef661b8f9a13e96116f82cbfdba09ade5f939fc182917c0eb6ef0123b385 8426 shellfacts_0.1_all.deb
+Files: 
+ 2429881ab04bb672d2db4ddab6f022b3 575 admin extra shellfacts_0.1.dsc
+ bb05a25e06d0237116446f5da14e1db3 8502 admin extra shellfacts_0.1.tar.gz
+ 59546b74a2aa2db855db9c86e15db542 8426 admin extra shellfacts_0.1_all.deb
