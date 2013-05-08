@@ -1,7 +1,5 @@
 #! /bin/sh
 
-# comment
-
 [ "$DEBUG" = "true" ] || DEBUG=false
 
 die() {
@@ -57,7 +55,7 @@ get_pci_facts_full() {
 get_dmi_facts_light() {
     # dmidecode only display 2 lines of comment
     # if it has not access to chassis informations (ie. virtual machine)
-    [ `wc -l <<< "$DMIDECODE"` -gt 2 ] || {
+    [ `echo -n "$DMIDECODE" | wc -l` -gt 2 ] || {
         echo "product_model: virtual machine" && return 0
     }
     ## Get product informations
@@ -109,7 +107,7 @@ get_dmi_facts_light() {
 get_dmi_facts_full() {
     # dmidecode only display 2 lines of comment
     # if it has not access to chassis informations (ie. virtual machine)
-    [ `wc -l <<< "$DMIDECODE"` -gt 2 ] || {
+    [ `echo "$DMIDECODE" | wc -l` -gt 2 ] || {
         echo "product_model: virtual machine" && return 0
     }
 
@@ -192,7 +190,6 @@ get_dmi_facts_full() {
         printf("hw_mem_infos: {summary: {%s}, slots: {%s}}\n", summary, slots)'
     dmidecode_parse 'Memory Device' "$awk_body" "$awk_end"
 }
-
 
 [ "`whoami`" = "root" ] || die "you must be root"
 

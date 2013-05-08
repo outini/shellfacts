@@ -28,7 +28,7 @@ get_ifs_facts_full()
 {
     [ -z "${IFCFG}" ] ||
     echo "${IFCFG}" |awk -v os="$OS" '
-	BEGIN {
+        BEGIN {
 	    start = "interface_%d: { "
 	    hasip4 = 0
 	    hasip6 = 0
@@ -54,20 +54,20 @@ get_ifs_facts_full()
 		 split(vlan[1], ifvlan, ".")
 		 printf("name: %s, vlan: %s, parent: %s",
                        vlan[1], ifvlan[2], vlan[2])
-	     } else
+	    } else
 		 printf("name: %s", interface)
-	     }
+	}
 
-	     /inet.?\ / {
-	         ip = $2
-		 sub(/\/[0-9]+/, "", ip)
-		 if (ip !~ ":")
-		     if (hasip4 == 0) {
-		         printf(", ipv4_addr: [ \"%s\"", ip)
-			 hasip4 = 1
-		     } else
-			 printf(", \"%s\"", ip)
-		  else {
+	/inet.?\ / {
+	    ip = $2
+	    sub(/\/[0-9]+/, "", ip)
+	    if (ip !~ ":")
+	    if (hasip4 == 0) {
+	        printf(", ipv4_addr: [ \"%s\"", ip)
+	        hasip4 = 1
+	    } else
+	       printf(", \"%s\"", ip)
+	  else {
 		      if (hasip6 == 0) {
 		          # assume ipv6 address always come after ipv4
 			  if (hasip4 == 1) printf(" ]")
@@ -102,6 +102,13 @@ get_bridges_facts_full()
 {
     [ -z "${BRCFG}" ] ||
     echo "${BRCFG}" | awk '
+        function join(array, start, end, sep) {
+            result = array[start]
+            for (i = start + 1; i <= end; i++)
+              result = result sep array[i]
+            return result
+        }
+
 	/^[a-z0-9]/ && NR > 1 {
             if (j > 0) {
                 members = mbrs[0]
@@ -120,9 +127,7 @@ get_bridges_facts_full()
                 for (x = 1; x < j; x++) members = members ", " mbrs[x]
                 brs[i-1] = brs[i-1] " [" members "]}"
             }
-            bridges = brs[0]
-            for (x = 1; x < i; x++) bridges = bridges ", " brs[x]
-            printf("network_bridges: [%s]\n", bridges)
+            printf("network_bridges: [%s]\n", join(brs, 0, length(brs), ", "))
 	}
 	'
 }
@@ -137,32 +142,49 @@ get_routes_facts_light()
 get_routes_facts_full()
 {
     netstat -rn -46 | awk '
-	BEGIN {num = 0}
+        function join(array, start, end, sep) {
+            result = array[start]
+            for (i = start + 1; i <= end; i++)
+              result = result sep array[i]
+            return result
+        }
+
 	! /^[A-Z\ \t]/ {
 	    dest = $1
 	    gw = $2
 	    if ($1 == "0.0.0.0") dest = "default"
 	    if ($2 == "0.0.0.0" || $2 ~ "::1?") gw = "local"
-	    printf("route_%d: { destination: \"%s\", gateway: \"%s\"", num, dest, gw)
-	    if (dest !~ ":")
-	        printf(", netmask: %s, interface: %s }\n", $3, $8)
-	    else
-	        printf(", interface: %s }\n", $7)
-		num++
+            if (dest !~ ":") {
+                netmask = $3
+                interface = $8
+            } else {
+                split(dest, dest_ip6, "/")
+                dest = dest_ip6[1]
+                netmask = "/" dest_ip6[2]
+                interface = $7
+            }
+
+	    routes[num++] = sprintf("{destination: \"%s\", gateway: \"%s\", netmask: \"%s\", interface: \"%s\"}",
+                                 dest, gw, netmask, interface)
 	    }
+        END {
+            printf("network_routes: [%s]\n",
+                   join(routes, 0, length(routes), ", "))
+        }
 	'
 }
 
-get_resolver_facts_light()
+get_resolver_facts()
 {
-    awk '
-        /nameserver/ { printf("resolver_ip: \"%s\"\n", $2) }
-        /domain/ { printf("resolver_domain: \"%s\"\n", $2) }
-        ' /etc/resolv.conf
-}
-get_resolver_facts_full()
-{
-    awk '
+    details_level="$1"
+    resolver_config="/etc/resolv.conf"
+
+    awk -v details_level="$details_level" '
+        BEGIN {
+            resolver = ""
+            domain = ""
+            ysearch = ""
+        }
 	/nameserver/ { resolver = $2 }
 	/domain/ { domain = $2 }
 	/search/ {
@@ -170,9 +192,14 @@ get_resolver_facts_full()
 	    for (i = 3; i <= NF; i++) ysearch = ysearch ", " $i
 	}
 	END {
-            printf("resolver: { ip: %s, domain: %s, search: [ %s ] }\n",
-		    resolver, domain, ysearch)
-        }' /etc/resolv.conf
+            if (details_level ~ /^light$/) {
+                print "resolver_ip: " resolver
+                print "resolver_domain: " domain
+            } else
+                printf("resolver: { ip: %s, domain: %s, search: [%s] }\n",
+		       resolver, domain, ysearch)
+
+        }' "$resolver_config"
 }
 
 
@@ -190,4 +217,4 @@ init_infos 2>/dev/null
 get_ifs_facts_$details
 get_bridges_facts_$details
 get_routes_facts_$details
-get_resolver_facts_$details
+get_resolver_facts $details
