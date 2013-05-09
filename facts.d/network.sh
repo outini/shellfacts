@@ -4,22 +4,23 @@
 
 PATH=$PATH:/sbin:/usr/sbin
 
+## temporary include path to test
+include_path="`cd $(dirname $0) && pwd`/../libs"
+awk_tools="${include_path}/shellfacts.awk"
+
 init_infos() {
     OS=`uname -s`
     case $OS in
 	Linux)
-	    [ -z "$IFCFG" ] &&
-	    { IFCFG=`ip addr show` || IFCFG= ; }
-	    [ -z "$BRCFG" ] &&
-	    { BRCFG=`brctl show` || BRCFG= ; }
+	    [ -z "$IFCFG" ] && { IFCFG=`ip addr show` || IFCFG= ; }
+	    [ -z "$BRCFG" ] && { BRCFG=`brctl show` || BRCFG= ; }
 	    ;;
 	*)
-	    [ -z "$IFCFG" ] &&
-	    { IFCFG=`ifconfig -a` || IFCFG= ; }
-	    [ -z "$BRCFG" ] &&
-	    { BRCFG=`brconfig -a` || BRCFG= ; }
+	    [ -z "$IFCFG" ] && { IFCFG=`ifconfig -a` || IFCFG= ; }
+	    [ -z "$BRCFG" ] && { BRCFG=`brconfig -a` || BRCFG= ; }
 	    ;;
     esac
+    RESOLVCFG="/etc/resolv.conf"
 }
 
 get_ifs_facts_light()
@@ -139,9 +140,13 @@ get_routes_facts_light()
             if ($1 == "0.0.0.0") { printf("network_ipv4_gw: \"%s:%s\"\n", $2, $8) }
         }'
 }
-get_routes_facts_full()
+get_routes_facts()
 {
-    netstat -rn -46 | awk '
+    details_level="$1"
+
+    netstat -rn -46 |
+    awk -v details_level="$details_level" \
+	'
         function join(array, start, end, sep) {
             result = array[start]
             for (i = start + 1; i <= end; i++)
@@ -164,12 +169,24 @@ get_routes_facts_full()
                 interface = $7
             }
 
-	    routes[num++] = sprintf("{destination: \"%s\", gateway: \"%s\", netmask: \"%s\", interface: \"%s\"}",
-                                 dest, gw, netmask, interface)
+	    #routes[num++] = sprintf("{destination: \"%s\", gateway: \"%s\", netmask: \"%s\", interface: \"%s\"}", dest, gw, netmask, interface)
+
+            route["destination"] = dest
+            route["gateway"] = gw
+            route["netmask"] = netmask
+            route["interface"] = interface
+            routes[num++] = route
 	    }
         END {
-            printf("network_routes: [%s]\n",
-                   join(routes, 0, length(routes), ", "))
+            if (details_level ~ /^light$/) {
+                print routes
+                for (route in routes)
+                    print route["destination"]
+                    if (route["destination"] ~ /default/)
+                        print "network_ipv4_gw: " route["gateway"]
+            } else
+                printf("network_routes: [%s]\n",
+                       join(routes, 0, length(routes), ", "))
         }
 	'
 }
@@ -177,9 +194,9 @@ get_routes_facts_full()
 get_resolver_facts()
 {
     details_level="$1"
-    resolver_config="/etc/resolv.conf"
 
-    awk -v details_level="$details_level" '
+    awk -v details_level="$details_level" \
+	'
         BEGIN {
             resolver = ""
             domain = ""
@@ -199,7 +216,7 @@ get_resolver_facts()
                 printf("resolver: { ip: %s, domain: %s, search: [%s] }\n",
 		       resolver, domain, ysearch)
 
-        }' "$resolver_config"
+        }' "$RESOLVCFG"
 }
 
 
@@ -214,7 +231,7 @@ done
 [ -z "$details" ] && details=light
 
 init_infos 2>/dev/null
-get_ifs_facts_$details
-get_bridges_facts_$details
-get_routes_facts_$details
+#get_ifs_facts_$details
+#get_bridges_facts_$details
+get_routes_facts $details
 get_resolver_facts $details
