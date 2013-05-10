@@ -4,20 +4,18 @@
 
 PATH=$PATH:/sbin:/usr/sbin
 
-## temporary include path to test
-include_path="`cd $(dirname $0) && pwd`/../libs"
-awk_tools="${include_path}/shellfacts.awk"
-
 init_infos() {
     OS=`uname -s`
     case $OS in
 	Linux)
-	    [ -z "$IFCFG" ] && { IFCFG=`ip addr show` || IFCFG= ; }
-	    [ -z "$BRCFG" ] && { BRCFG=`brctl show` || BRCFG= ; }
+	    IFCFG=`ip addr show`
+	    BRCFG=`brctl show`
+	    NETSTAT=`netstat -rn -46`
 	    ;;
 	*)
-	    [ -z "$IFCFG" ] && { IFCFG=`ifconfig -a` || IFCFG= ; }
-	    [ -z "$BRCFG" ] && { BRCFG=`brconfig -a` || BRCFG= ; }
+	    IFCFG=`ifconfig -a`
+	    BRCFG=`brconfig -a`
+	    NETSTAT=`netstat -rn -finet ; netstat -rn -finet6`
 	    ;;
     esac
     RESOLVCFG="/etc/resolv.conf"
@@ -133,105 +131,89 @@ get_bridges_facts_full()
 	'
 }
 
-get_routes_facts_light()
-{
-    netstat -rn -46 | awk '
-        ! /^[A-Z\ \t]/ {
-            if ($1 == "0.0.0.0") { printf("network_ipv4_gw: \"%s:%s\"\n", $2, $8) }
-        }'
-}
 get_routes_facts()
 {
-    details_level="$1"
+    ## Linux ipv4 / ipv6
+    # Destination / Gateway / Genmask / Flags / MSS / Window / irtt / Iface
+    # Destination / Next Hop / Flag / Met / Ref / Use / If
+    ## Unix ipv4 == ipv6
+    # Destination / Gateway / Flags / Refs / Use / Mtu / Interface
 
-    netstat -rn -46 |
-    awk -v details_level="$details_level" \
-	'
-        function join(array, start, end, sep) {
-            result = array[start]
-            for (i = start + 1; i <= end; i++)
-              result = result sep array[i]
-            return result
-        }
+    echo "$NETSTAT" |
+    awk -v "OS=$OS" '
+BEGIN {
+    print "network_routing:"
+    print "  routes:"
+}
 
-	! /^[A-Z\ \t]/ {
-	    dest = $1
-	    gw = $2
-	    if ($1 == "0.0.0.0") dest = "default"
-	    if ($2 == "0.0.0.0" || $2 ~ "::1?") gw = "local"
-            if (dest !~ ":") {
-                netmask = $3
-                interface = $8
-            } else {
-                split(dest, dest_ip6, "/")
-                dest = dest_ip6[1]
-                netmask = "/" dest_ip6[2]
-                interface = $7
-            }
+! /(^[A-Za-z]+[\ \t]|^default)/ {
+    dest = $1
+    gw = $2
 
-	    #routes[num++] = sprintf("{destination: \"%s\", gateway: \"%s\", netmask: \"%s\", interface: \"%s\"}", dest, gw, netmask, interface)
+    if ($1 == "0.0.0.0") dest = "default"
+    if ($2 == "0.0.0.0" || $2 ~ "::1?") gw = "local"
 
-            route["destination"] = dest
-            route["gateway"] = gw
-            route["netmask"] = netmask
-            route["interface"] = interface
-            routes[num++] = route
-	    }
-        END {
-            if (details_level ~ /^light$/) {
-                print routes
-                for (route in routes)
-                    print route["destination"]
-                    if (route["destination"] ~ /default/)
-                        print "network_ipv4_gw: " route["gateway"]
-            } else
-                printf("network_routes: [%s]\n",
-                       join(routes, 0, length(routes), ", "))
-        }
-	'
+    if (dest !~ ":") {
+netmask = $3
+interface = $8
+type = "ipv4"
+    } else {
+split(dest, dest_ip6, "/")
+dest = dest_ip6[1]
+netmask = "/" dest_ip6[2]
+interface = $7
+type = "ipv6"
+    }
+
+    printf("  - destination: \"%s\"\n", dest)
+    printf("    gateway: \"%s\"\n", gw)
+    printf("    netmask: \"%s\"\n", netmask)
+    printf("    interface: \"%s\"\n", interface)
+
+    if (type == "ipv6") ipv6_routes_count++
+    else ipv4_routes_count++
+    total_routes_count++
+}
+
+END {
+    print "  routes_ipv4_count: " ipv4_routes_count
+    print "  routes_ipv6_count: " ipv6_routes_count
+    print "  routes_total_count: " total_routes_count
+}
+'
 }
 
 get_resolver_facts()
 {
     details_level="$1"
 
-    awk -v details_level="$details_level" \
-	'
-        BEGIN {
-            resolver = ""
-            domain = ""
-            ysearch = ""
-        }
-	/nameserver/ { resolver = $2 }
-	/domain/ { domain = $2 }
-	/search/ {
-	    ysearch = $2
-	    for (i = 3; i <= NF; i++) ysearch = ysearch ", " $i
-	}
-	END {
-            if (details_level ~ /^light$/) {
-                print "resolver_ip: " resolver
-                print "resolver_domain: " domain
-            } else
-                printf("resolver: { ip: %s, domain: %s, search: [%s] }\n",
-		       resolver, domain, ysearch)
+    awk	'
+BEGIN {
+    resolver = ""
+    domain = ""
+    ysearch = ""
 
-        }' "$RESOLVCFG"
+    print "network_resolver:"
+}
+
+/nameserver/ { print "  ip: " $2 }
+/domain/ { print "  domain: " $2 }
+/search/ {
+    print "  search:"
+    for (i = 2; i <= NF; i++) print "  - " $i
+}
+' "$RESOLVCFG"
 }
 
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        # force refresh can be requested via cli but is ignored here
-        force-refresh) shift ;;
-        light|full) details="$1"; shift ;;
         *) echo "unknown arg: $1"; shift ;;
     esac
 done
-[ -z "$details" ] && details=light
 
 init_infos 2>/dev/null
 #get_ifs_facts_$details
 #get_bridges_facts_$details
-get_routes_facts $details
-get_resolver_facts $details
+get_routes_facts
+get_resolver_facts
