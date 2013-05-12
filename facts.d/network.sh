@@ -21,83 +21,67 @@ init_infos() {
     RESOLVCFG="/etc/resolv.conf"
 }
 
-get_ifs_facts_light()
-{ :; }
-get_ifs_facts_full()
+get_ifs_facts()
 {
     [ -z "${IFCFG}" ] ||
-    echo "${IFCFG}" |awk -v os="$OS" '
-        BEGIN {
-	    start = "interface_%d: { "
-	    hasip4 = 0
-	    hasip6 = 0
-	    num = 0
-	}
-
-	/^[a-z0-9]+:/ {
-	    # close brackets from ip6 or ip4
-	    if (hasip6 == 1 || (hasip6 == 0 && hasip4 == 1)) printf(" ]")
-	    printf(start, num)
-	    # new interface
-	    hasip4 = 0
-	    hasip6 = 0
-	    num++
-	    start = " }\ninterface_%d: { "
-	    if (os = "Linux")
-		 interface = $2
-	    else
-		 interface = $1
-	    sub(/:/, "", interface)
-	    if (interface ~ "@") {
-		 split(interface, vlan, "@")
-		 split(vlan[1], ifvlan, ".")
-		 printf("name: %s, vlan: %s, parent: %s",
-                       vlan[1], ifvlan[2], vlan[2])
-	    } else
-		 printf("name: %s", interface)
-	}
-
-	/inet.?\ / {
-	    ip = $2
-	    sub(/\/[0-9]+/, "", ip)
-	    if (ip !~ ":")
-	    if (hasip4 == 0) {
-	        printf(", ipv4_addr: [ \"%s\"", ip)
-	        hasip4 = 1
-	    } else
-	       printf(", \"%s\"", ip)
-	  else {
-		      if (hasip6 == 0) {
-		          # assume ipv6 address always come after ipv4
-			  if (hasip4 == 1) printf(" ]")
-			  printf(", ipv6_addr: [ \"%s\"", ip)
-			  hasip6 = 1
-		      } else
-			  printf(", \"%s\"", ip)
-		  }
-	     }
-
-	     /(link\/ether|address:)/ {
-	         printf(", mac_addr: \"%s\"", $2)
-	     }
-
-	     END {
-	         if (hasip6 == 1 || (hasip6 == 0 && hasip4 == 1))
-		     printf(" ]")
-		 print " }"
-	     }
-	'
+    echo "${IFCFG}" |
+    awk -v OS="$OS" '
+BEGIN {
+    print "network_interfaces:"
 }
 
-get_bridges_facts_light()
-{
-    [ -z "${BRCFG}" ] ||
-    echo "${BRCFG}" | awk '
-        /^[a-z0-9]/ && NR > 1 { count++ }
-        END { print "network_bridges_count: " count }
-        '
+/^[a-z0-9]+:/ {
+    # new interface
+    hasip4 = 0
+    hasip6 = 0
+
+    if (OS == "Linux") interface = $2
+    else interface = $1
+    sub(/:/, "", interface)
+
+    if (interface ~ "@") {
+        split(interface, vlan, "@")
+        split(vlan[1], ifvlan, ".")
+        printf("- name: %s\n", vlan[1])
+        printf("  vlan: %s\n", ifvlan[1])
+        printf("  parent: %s\n", vlan[2])
+    } else
+        printf("- name: %s\n", interface)
 }
-get_bridges_facts_full()
+
+/inet.?\ / {
+    if (OS == "Linux")
+        split($2, cidr, "/")
+    else
+        if ($2 == "alias") {
+            cidr[1] = $3
+            cidr[2] = $5
+        } else {
+            cidr[1] = $2
+            cidr[2] = $4
+        }
+
+    gsub(/%.*$/, "", cidr[1])
+
+    if (cidr[1] !~ ":" && hasip4 == 0) {
+        print "  ipv4_addr:"
+        hasip4 = 1
+    } else if (hasip6 == 0) {
+        # assume ipv6 address always come after ipv4
+        print "  ipv6_addr:"
+        hasip6 = 1
+    }
+    printf("  - address: \"%s\"\n", cidr[1])
+    printf("    netmask: \"%s\"\n", cidr[2])
+}
+
+/(link\/ether|address:)/ {
+    printf("  mac_addr: \"%s\"\n", $2)
+}
+'
+}
+
+get_bridges_facts()
 {
     [ -z "${BRCFG}" ] ||
     echo "${BRCFG}" | awk '
@@ -139,6 +123,7 @@ get_routes_facts()
     ## Unix ipv4 == ipv6
     # Destination / Gateway / Flags / Refs / Use / Mtu / Interface
 
+    [ -z "$NETSTAT" ] ||
     echo "$NETSTAT" |
     awk -v "OS=$OS" '
 BEGIN {
@@ -146,29 +131,33 @@ BEGIN {
     print "  routes:"
 }
 
-! /(^[A-Za-z]+[\ \t]|^default)/ {
+# ignore the header line
+/(^Destination|Internet|Kernel)/ { next }
+
+/(^[a-f0-9:]+|^default)/ {
     dest = $1
     gw = $2
 
-    if ($1 == "0.0.0.0") dest = "default"
-    if ($2 == "0.0.0.0" || $2 ~ "::1?") gw = "local"
-
-    if (dest !~ ":") {
-netmask = $3
-interface = $8
-type = "ipv4"
+    if (OS == "Linux" && dest !~ ":") {
+        netmask = $3
+        interface = $8
+        type = "ipv4"
     } else {
-split(dest, dest_ip6, "/")
-dest = dest_ip6[1]
-netmask = "/" dest_ip6[2]
-interface = $7
-type = "ipv6"
+        split(dest, dest_ip6, "/")
+        dest = dest_ip6[1]
+        netmask = dest_ip6[2]
+        interface = $7
+        if (dest ~ ":") type = "ipv6"
+        else type = "ipv4"
     }
+
+    gsub(/%.*$/, "", dest)
 
     printf("  - destination: \"%s\"\n", dest)
     printf("    gateway: \"%s\"\n", gw)
     printf("    netmask: \"%s\"\n", netmask)
     printf("    interface: \"%s\"\n", interface)
+    printf("    type: \"%s\"\n", type)
 
     if (type == "ipv6") ipv6_routes_count++
     else ipv4_routes_count++
@@ -188,19 +177,17 @@ get_resolver_facts()
     details_level="$1"
 
     awk	'
-BEGIN {
-    resolver = ""
-    domain = ""
-    ysearch = ""
+/nameserver/ { nameservers[n++] = $2 }
+/domain/ { domain = $2 }
+/search/ { for (i = 2; i <= NF; i++) search[s++] = $i }
 
+END {
     print "network_resolver:"
-}
-
-/nameserver/ { print "  ip: " $2 }
-/domain/ { print "  domain: " $2 }
-/search/ {
+    print "  domain: " domain
+    print "  nameservers:"
+    for (i in nameservers) print "  - " nameservers[i]
     print "  search:"
-    for (i = 2; i <= NF; i++) print "  - " $i
+    for (i in search) print "  - " search[i]
 }
 ' "$RESOLVCFG"
 }
@@ -213,7 +200,7 @@ while [ $# -gt 0 ]; do
 done
 
 init_infos 2>/dev/null
-#get_ifs_facts_$details
-#get_bridges_facts_$details
+get_ifs_facts
+#get_bridges_facts
 get_routes_facts
 get_resolver_facts
