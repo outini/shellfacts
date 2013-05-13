@@ -4,38 +4,30 @@ PATH=$PATH:/sbin
 
 [ "$DEBUG" = "true" ] || DEBUG=false
 
-display_system_facts_light() {
-    awk -F: '
-/#### BEGIN GENERIC FACTS ####/,/#### END GENERIC FACTS ####/ {
-  if ($1 !~ /^#### .* ####$/) { printf("%s: %s\n", $1, $2) }
+init_infos() {
+    CPU
 }
 
-/#### BEGIN CPUS FACTS ####/,/#### END CPUS FACTS ####/ {
-  if ($1 ~ /model name/) { cpu_model = $2; cpu_count++ }
+get_common_sysfacts() {
+    echo "system_commons:"
+    hostname=`hostname` && echo "  hostname: $hostname"
+    hostfqdn=`hostname -f || { echo -n "${hostname}.; domainname; }"` &&
+    echo "  hostfqdn: $hostfqdn"
+    kernel=`uname -r` && echo "  kernel_release: $kernel"
+    os=`uname -o || uname -s` && echo "  operating_system: $os"
 }
 
-/#### BEGIN MEM FACTS ####/,/#### END MEM FACTS ####/ {
-  if ($1 ~ /Mem/) { mem_size = $2 }
-  else if ($1 ~ /Swap/) { swap_size = $2 }
+get_cpus_sysfacts() {
+    
 }
 
-END {
-  printf("cpu_model: %s\ncpu_count: %d\n", cpu_model, cpu_count)
-  printf("memory: %d\nswap: %d\n", mem_size, swap_size)
-}
-'
-}
-display_system_facts_full() {
+display_system_facts() {
     awk -F: '
 function join(array, start, end, sep) {
   result = array[start]
   for (i = start + 1; i <= end; i++)
     result = result sep array[i]
   return result
-}
-
-/#### BEGIN GENERIC FACTS ####/,/#### END GENERIC FACTS ####/ {
-  if ($1 !~ /^#### .* ####$/) { printf("%s: %s\n", $1, $2) }
 }
 
 /#### BEGIN CPUS FACTS ####/,/#### END CPUS FACTS ####/ {
@@ -94,20 +86,16 @@ END {
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        # force refresh can be requested via cli but is ignored here
-        force-refresh) shift ;;
-        light|full) details="$1"; shift ;;
         *) echo "unknown arg: $1"; shift ;;
     esac
 done
-[ -z "$details" ] && details=light
 
 {
 echo "#### BEGIN GENERIC FACTS ####"
 hostname=`hostname` && echo "hostname:$hostname"
-hostfqdn=`hostname -f` echo "hostfqdn:$hostfqdn"
+hostfqdn=`hostname -f` && echo "hostfqdn:$hostfqdn"
 kernel=`uname -r` && echo "kernel_release:$kernel"
-os=`uname -o` && echo "operating_system:$os"
+os=`uname -o || uname -s` && echo "operating_system:$os"
 echo "#### END GENERIC FACTS ####"
 
 echo "#### BEGIN CPUS FACTS ####"
@@ -119,6 +107,6 @@ free
 echo "#### END CPUS FACTS ####"
 
 echo "#### BEGIN SYSCTL FACTS ####"
-sysctl -a
+#sysctl -a
 echo "#### END SYSCTL FACTS ####"
-} 2>/dev/null | display_system_facts_${details}
+} 2>/dev/null | display_system_facts
