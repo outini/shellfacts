@@ -5,6 +5,9 @@
 PATH=$PATH:/sbin:/usr/sbin
 
 init_infos() {
+    [ "`whoami`" = "root" ] ||
+    echo "superuser is required, informations may not be accurate" >&2
+
     OS=`uname -s`
     case $OS in
 	Linux)
@@ -25,7 +28,7 @@ get_ifs_facts()
 {
     [ -z "${IFCFG}" ] ||
     echo "${IFCFG}" |
-    awk -v OS="$OS" '
+    awk -v "OS=$OS" '
 BEGIN {
     print "network_interfaces:"
 }
@@ -82,35 +85,58 @@ BEGIN {
 get_bridges_facts()
 {
     [ -z "${BRCFG}" ] ||
-    echo "${BRCFG}" | awk '
-        function join(array, start, end, sep) {
-            result = array[start]
-            for (i = start + 1; i <= end; i++)
-              result = result sep array[i]
-            return result
-        }
+    echo "${BRCFG}" |
+    awk -v OS="$OS" '
+BEGIN {
+    bridges_count = 0
+    print "network_bridges:"
+    print "  bridges:"
+}
 
-	/^[a-z0-9]/ && NR > 1 {
-            if (j > 0) {
-                members = mbrs[0]
-                for (x = 1; x < j; x++) members = members ", " mbrs[x]
-                brs[i-1] = brs[i-1] " [" members "]}"
-            }
-            j = 0
-	    brs[i++] = sprintf("{name: %s, stp_ena: %s, members:", $1, $3)
-            mbrs[j++] = $4
-	}
-	{ if (NF == 1) mbrs[j++] = $1 }
+/^[a-z0-9]/ {
+    # ignore the Linux brctl header
+    if (OS == "Linux" && NR == 1) next
 
-	END {
-            if (j > 0) {
-                members = mbrs[0]
-                for (x = 1; x < j; x++) members = members ", " mbrs[x]
-                brs[i-1] = brs[i-1] " [" members "]}"
-            }
-            printf("network_bridges: [%s]\n", join(brs, 0, length(brs), ", "))
-	}
-	'
+    bridges_count++
+    gsub(/:$/, "", $1)
+    print "  - name: \"" $1 "\""
+
+    if (OS == "Linux") {
+        print "    id: \"" $2 "\""
+        print "    stp: \"" $3 "\""
+        print "    interfaces:"
+        print "    - \"" $4 "\""
+    }
+}
+
+{
+    if (OS == "Linux" && NF == 1)
+        print "    - \"" $1 "\""
+
+    if (config_section == 1 && $1 != "Interfaces:")
+        for (i = 1; i <= NF; i++) print "      " $(i++) ": \"" $i "\""
+
+    if (interface_section == 1 && $2 ~ /flags=/) print "    - \"" $1 "\""
+
+    # assume "Address cache" is the last section
+    if ($0 ~ /^\s+Address cache/) interface_section = 0
+
+    if ($1 == "Configuration:") {
+        config_section = 1
+        print "    configuration:"
+    }
+    # assume that "interfaces" are below "configuration"
+    if ($1 == "Interfaces:") {
+        config_section = 0
+        interface_section = 1
+        print "    interfaces:"
+    }
+}
+
+END {
+    print "  bridges_count: " bridges_count
+}
+'
 }
 
 get_routes_facts()
@@ -170,8 +196,6 @@ END {
 
 get_resolver_facts()
 {
-    details_level="$1"
-
     awk	'
 /nameserver/ { nameservers[n++] = $2 }
 /domain/ { domain = $2 }
@@ -191,12 +215,13 @@ END {
 
 while [ $# -gt 0 ]; do
     case "$1" in
+	verify) init_infos ; exit ;;
         *) echo "unknown arg: $1"; shift ;;
     esac
 done
 
 init_infos 2>/dev/null
 get_ifs_facts
-#get_bridges_facts
+get_bridges_facts
 get_routes_facts
 get_resolver_facts
