@@ -3,10 +3,6 @@
   - Modify shellfacts options management
     - implement long and/or short options
 
-  - Possibility to run specifics facts on demand
-    - filters passed as argument, facts are splitted by comma
-    - auto-completion of fact's name with '.sh' to lookup facts.d directory
-
   - Implement a 'verify/check required' to raise missing functionnalities
   - Normalyze facts format with full documentation and exemples
 
