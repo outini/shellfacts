@@ -61,8 +61,6 @@ BEGIN {
             cidr[2] = $4
         }
 
-    gsub(/%.*$/, "", cidr[1])
-
     if (cidr[1] !~ ":" && hasip4 == 0) {
         print "  ipv4_addr:"
         hasip4 = 1
@@ -150,8 +148,6 @@ BEGIN {
         if (dest ~ ":") type = "ipv6"
         else type = "ipv4"
     }
-
-    gsub(/%.*$/, "", dest)
 
     printf("  - destination: \"%s\"\n", dest)
     printf("    gateway: \"%s\"\n", gw)
