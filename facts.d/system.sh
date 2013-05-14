@@ -5,23 +5,74 @@ PATH=$PATH:/sbin
 [ "$DEBUG" = "true" ] || DEBUG=false
 
 init_infos() {
-    CPU
+    HOSTNAME=`hostname` || \
+	echo "[ERROR] unable to get hostname"
+    HOSTFQDN=`hostname -f || { echo -n "${HOSTNAME}."; domainname; }` || \
+	echo "[ERROR] unable to get hostfqdn"
+    KERNEL=`uname -r` || \
+	echo "[ERROR] unable to get kernel release"
+    OS=`uname -o || uname -s` || \
+	echo "[ERROR] unable to get operating system"
+    CPUINFOS=`cat /proc/cpuinfo` || \
+	echo "[ERROR] unable to get cpus informations"
+    MEMINFOS=`free` || \
+	echo "[ERROR] unable to get memory informations"
+    SYSCTLINFOS=`sysctl -a` || \
+	echo "[ERROR] unable to get sysctl informations"
 }
 
 get_common_sysfacts() {
     echo "system_commons:"
-    hostname=`hostname` && echo "  hostname: $hostname"
-    hostfqdn=`hostname -f || { echo -n "${hostname}.; domainname; }"` &&
-    echo "  hostfqdn: $hostfqdn"
-    kernel=`uname -r` && echo "  kernel_release: $kernel"
-    os=`uname -o || uname -s` && echo "  operating_system: $os"
+    echo "  hostname: $HOSTNAME"
+    echo "  hostfqdn: $HOSTFQDN"
+    echo "  kernel_release: $KERNEL"
+    echo "  operating_system: $OS"
 }
 
 get_cpus_sysfacts() {
-    
+    [ -z "$CPUINFOS" ] ||
+    echo "$CPUINFOS" | awk -F": " '
+BEGIN { print "system_cpus:" }
+
+/^processor/ { print "- cpu_id: " $2 }
+/^vendor_id/ { print "  cpu_vendor: " $2 }
+/^model name/ { gsub(/[ \t]+/, " ", $2); print "  cpu_model: " $2 }
+/^cpu MHz/ { print "  cpu_speed: " $2 }
+/^cache size/ { print "  cpu_cache: " $2 }
+/^flags/ {
+    print "  cpu_flags:"
+    split($2, cpu_flags, / /)
+    for (i in cpu_flags) print "  - " cpu_flags[i]
+}
+'
 }
 
-display_system_facts() {
+get_mem_sysfacts() {
+    [ -z "$MEMINFOS" ] ||
+    echo "$MEMINFOS" | awk -v "OS=$OS" '
+BEGIN { print "system_memory:" }
+
+/^Mem/ {
+    print "  memory_total: " $2
+    print "  memory_used: " $3
+    print "  memory_free: " $4
+    if (OS ~ /Linux/) memory_buffers = $6
+    else memory_buffers = $5
+    print "  memory_buffers: " memory_buffers
+    printf("  memory_usage: %.1f%%\n", memory_buffers * 100 / $2)
+}
+/^Swap:/ {
+    print "  swap_total: " $2
+    print "  swap_used: " $3
+    print "  swap_free: " $4
+    printf("  swap_usage: %.1f%%\n", $3 * 100 / $2)
+}
+'
+}
+
+get_sysctl_sysfacts() {
+    [ -z "$SYSCTLINFOS" ] ||
+    echo "$SYSCTLINFOS" |
     awk -F: '
 function join(array, start, end, sep) {
   result = array[start]
@@ -30,18 +81,7 @@ function join(array, start, end, sep) {
   return result
 }
 
-/#### BEGIN CPUS FACTS ####/,/#### END CPUS FACTS ####/ {
-  if ($1 ~ /model name/) { cpu_model = $2; cpu_count++ }
-  else if ($1 ~ /cpu MHz/) { cpu_speed = $2 }
-}
-
-/#### BEGIN MEM FACTS ####/,/#### END MEM FACTS ####/ {
-  if ($1 ~ /Mem/) { mem_size = $2 }
-  else if ($1 ~ /buffers/) { mem_buffers = $2 }
-  else if ($1 ~ /Swap/) { swap_size = $2; swap_use = $3 }
-}
-
-/#### BEGIN SYSCTL FACTS ####/,/#### END SYSCTL FACTS ####/ {
+{
   if ($1 !~ /^#### .* ####$/) {
 
     # for nested entries like:
@@ -68,45 +108,27 @@ function join(array, start, end, sep) {
 
 END {
   printf("sysctl: {%s}\n", join(sysctl_array, 0, sysctl_index-1, ", "))
-
-  printf("cpu_infos: {model: %s, speed: %s, count: %d}\n",
-         cpu_model, cpu_speed, cpu_count)
-
-  mem_usage = mem_buffers * 100 / mem_size
-  swap_usage = swap_use * 100 / swap_size
-  mem_line = sprintf("total: %d, buffers: %d, usage: %.1f",
-                     mem_size, mem_buffers, mem_usage)
-  swap_line = sprintf("swap_total: %d, swap_use: %d, swap_usage: %.1f",
-                      swap_size, swap_use, swap_usage)
-  printf("memory_infos: {%s, %s}\n", mem_line, swap_line)
 }
 '
 }
 
 
-while [ $# -gt 0 ]; do
-    case "$1" in
-        *) echo "unknown arg: $1"; shift ;;
-    esac
-done
+# while [ $# -gt 0 ]; do
+#     case "$1" in
+#         *) echo "unknown arg: $1"; shift ;;
+#     esac
+# done
 
-{
-echo "#### BEGIN GENERIC FACTS ####"
-hostname=`hostname` && echo "hostname:$hostname"
-hostfqdn=`hostname -f` && echo "hostfqdn:$hostfqdn"
-kernel=`uname -r` && echo "kernel_release:$kernel"
-os=`uname -o || uname -s` && echo "operating_system:$os"
-echo "#### END GENERIC FACTS ####"
+#echo "#### BEGIN MEM FACTS ####"
+#free
+#echo "#### END CPUS FACTS ####"
 
-echo "#### BEGIN CPUS FACTS ####"
-cat /proc/cpuinfo
-echo "#### END CPUS FACTS ####"
-
-echo "#### BEGIN MEM FACTS ####"
-free
-echo "#### END CPUS FACTS ####"
-
-echo "#### BEGIN SYSCTL FACTS ####"
+#echo "#### BEGIN SYSCTL FACTS ####"
 #sysctl -a
-echo "#### END SYSCTL FACTS ####"
-} 2>/dev/null | display_system_facts
+#echo "#### END SYSCTL FACTS ####"
+
+init_infos 2>/dev/null
+get_common_sysfacts
+get_cpus_sysfacts
+get_mem_sysfacts
+get_sysctl_sysfacts
